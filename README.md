@@ -184,12 +184,7 @@ This tests all 8 categories with various temperature settings to evaluate model 
 6. **8 Core Categories**: Covers essential FastAPI patterns
 7. **Proven Results**: Consistently reproducible outcomes
 
-## 🔗 Original Location
 
-All files were copied from the main fine-tuning workspace:
-```
-/Users/rchandran/Library/CloudStorage/OneDrive-DiligentCorporation/APPFIELD/LLM_RESEARCH/FINE_TUNING/
-```
 
 ## 📅 Archive Information
 
@@ -197,12 +192,5 @@ All files were copied from the main fine-tuning workspace:
 **Model Version**: V5.8  
 **Status**: Production-ready archive  
 
----
 
-**Note**: The trained model weights (LoRA adapter) are stored on EC2 at:
-```
-/home/ec2-user/1BFINE/models/llama-1b-fastapi-v5-8/final/
-```
-
-This folder contains all scripts, dataset, and documentation needed to reproduce the training process.
 

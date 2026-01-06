@@ -267,7 +267,7 @@ tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B-Instruct")
 prompt = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 You are an expert FastAPI developer. Generate clean, production-ready code.
 <|eot_id|><|start_header_id|>user<|end_header_id|>
-Create a FastAPI POST endpoint to create a user with name and email using SQLAlchemy with error handling.
+Create a FastAPI POST endpoint to create a new user with firstname, lastname and email using SQLAlchemy
 <|eot_id|><|start_header_id|>assistant<|end_header_id|>
 """
 
@@ -333,28 +333,36 @@ from models import User
 router = APIRouter()
 
 @router.post("/users")
-def create_user(user: User):
+def create_user(firstname: str, lastname: str, email: str):
     db = get_db()  # ❌ Undefined
     session = db.session  # ❌ Wrong pattern
     try:
+        user = User(
+            firstname=firstname,
+            lastname=lastname,
+            email=email
+        )
         session.add(user)
         session.commit()
-        return {"message": "User created successfully"}
+        return {"message": "User created"}
     except Exception as e:  # ❌ Generic exception
         print(e)  # ❌ Just printing
         raise e
 
 # Issues:
-# ❌ Uses APIRouter (not @app pattern)
-# ❌ No Pydantic model for validation
+# ❌ Uses APIRouter instead of @app
+# ❌ No Pydantic model for input validation
+# ❌ Plain function parameters (no type validation)
 # ❌ get_db() is undefined
-# ❌ Wrong SQLAlchemy session pattern
-# ❌ Generic exception handling
-# ❌ Missing model definition
-# ❌ No proper error response
+# ❌ db.session pattern is incorrect (Flask-style)
+# ❌ Generic Exception handling
+# ❌ User model import from undefined 'models'
+# ❌ No proper error responses
+# ❌ No database rollback on error
+# ❌ Doesn't return the created user
 ```
 
-#### 🟢 Fine-Tuned Model Output (95% Quality)
+#### 🟢 Fine-Tuned V5.8 Model Output (95% Quality)
 ```python
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import Session, Mapped, mapped_column
@@ -366,32 +374,56 @@ from database import Base, get_db
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100))
+    firstname: Mapped[str] = mapped_column(String(100))
+    lastname: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(String(200), unique=True)
 
-# Pydantic Model
+# Pydantic Model for Request
 class UserCreate(BaseModel):
-    name: str = Field(..., min_length=3, max_length=100)
+    firstname: str = Field(..., min_length=2, max_length=100)
+    lastname: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
 
+# Pydantic Model for Response
+class UserResponse(BaseModel):
+    id: int
+    firstname: str
+    lastname: str
+    email: str
+    
+    class Config:
+        from_attributes = True
+
 # Endpoint
-@app.post("/users/", status_code=status.HTTP_201_CREATED)
+@app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    Create a new user with firstname, lastname, and email.
+    
+    - **firstname**: User's first name (2-100 characters)
+    - **lastname**: User's last name (2-100 characters)
+    - **email**: User's email address (must be unique)
+    """
     try:
-        # Check if email exists
-        existing = db.query(User).filter(User.email == user.email).first()
-        if existing:
+        # Check if email already exists
+        existing_user = db.query(User).filter(User.email == user.email).first()
+        if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
         
-        # Create user
-        new_user = User(**user.dict())
+        # Create new user
+        new_user = User(
+            firstname=user.firstname,
+            lastname=user.lastname,
+            email=user.email
+        )
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
         return new_user
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -402,15 +434,18 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         )
 
 # Strengths:
-# ✅ Complete SQLAlchemy model definition
-# ✅ Pydantic validation with Field constraints
-# ✅ Proper @app.post() decorator
-# ✅ Dependency injection: Depends(get_db)
-# ✅ Email uniqueness check
-# ✅ Proper HTTPException usage
+# ✅ Complete SQLAlchemy model with firstname, lastname, email
+# ✅ Pydantic validation with Field constraints (min/max length)
+# ✅ Separate request and response models
+# ✅ Proper @app.post() decorator with response_model
+# ✅ Dependency injection: db: Session = Depends(get_db)
+# ✅ Email uniqueness validation
+# ✅ Proper HTTPException with specific status codes
 # ✅ Database rollback on error
-# ✅ Type safety with Mapped[]
-# ✅ Production-ready error handling
+# ✅ Type safety with Mapped[] (SQLAlchemy 2.0 style)
+# ✅ API documentation with docstring
+# ✅ Returns created user object
+# ✅ from_attributes = True for Pydantic v2
 ```
 
 ### 📊 Quality Comparison
@@ -425,6 +460,80 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 | **Production Ready?**     | ❌         | ✅              | -           |
 
 **Overall Quality**: 40% → 95% = **138% improvement** 🚀
+
+### 🔍 Key Differences Explained
+
+| Feature | 🔵 Base Model | 🟢 Fine-Tuned V5.8 |
+|---------|--------------|-------------------|
+| **Model Definition** | Missing/imported from undefined module | Complete SQLAlchemy model with all fields |
+| **Field Names** | Generic or incomplete | Exact fields: `firstname`, `lastname`, `email` |
+| **Pydantic Validation** | None - uses plain parameters | Complete with `Field()` constraints |
+| **Type Safety** | Minimal | Full with `Mapped[]` and type hints |
+| **Error Handling** | Generic `Exception` | Specific `HTTPException` with status codes |
+| **Database Pattern** | Flask-style (`db.session`) | FastAPI + SQLAlchemy 2.0 (`Depends(get_db)`) |
+| **Email Validation** | None | `EmailStr` + uniqueness check |
+| **Response Model** | Dict/message only | Complete `UserResponse` Pydantic model |
+| **Error Recovery** | No rollback | `db.rollback()` on exception |
+| **API Docs** | None | Docstring with parameter descriptions |
+| **Return Value** | Generic message | Actual created user object |
+
+### 💡 Why V5.8 is Better
+
+**1. Complete SQLAlchemy Model**
+```python
+# Base: ❌ Undefined or imported from nowhere
+from models import User  # Where is this?
+
+# V5.8: ✅ Complete, explicit model definition
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    firstname: Mapped[str] = mapped_column(String(100))
+    lastname: Mapped[str] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(200), unique=True)
+```
+
+**2. Proper Input Validation**
+```python
+# Base: ❌ No validation
+def create_user(firstname: str, lastname: str, email: str):
+
+# V5.8: ✅ Pydantic validation with constraints
+class UserCreate(BaseModel):
+    firstname: str = Field(..., min_length=2, max_length=100)
+    lastname: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr  # Validates email format
+```
+
+**3. Modern FastAPI Patterns**
+```python
+# Base: ❌ Flask-style patterns
+@router.post("/users")  # Uses APIRouter
+db = get_db()  # Undefined function
+session = db.session  # Flask pattern
+
+# V5.8: ✅ FastAPI dependency injection
+@app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+```
+
+**4. Production-Ready Error Handling**
+```python
+# Base: ❌ Generic exception handling
+except Exception as e:
+    print(e)  # Just prints!
+    raise e
+
+# V5.8: ✅ Specific error handling with rollback
+except HTTPException:
+    raise  # Re-raise HTTP exceptions
+except Exception as e:
+    db.rollback()  # Rollback transaction
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to create user: {str(e)}"
+    )
+```
 
 ## 📊 What to Expect
 

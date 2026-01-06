@@ -686,5 +686,5 @@ LLAMA1BFT/
 
 **Estimated Total Time**: 30 minutes setup + 3 hours training = **~3.5 hours**
 
-**Ready to start?** Jump to [Step 1](#step-1-launch-ec2-instance-aws)! 🚀
+
 
